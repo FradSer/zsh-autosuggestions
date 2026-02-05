@@ -130,17 +130,17 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 | `ZSH_AUTOSUGGEST_AI_ENDPOINT` | `https://api.openai.com/v1` | API base URL |
 | `ZSH_AUTOSUGGEST_AI_MODEL` | `gpt-3.5-turbo` | Model name to use |
 | `ZSH_AUTOSUGGEST_AI_TIMEOUT` | `5` | Request timeout in seconds |
-| `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `0` | Minimum input length before querying |
-| `ZSH_AUTOSUGGEST_AI_HISTORY_LINES` | `20` | Number of recent history lines to send as context |
-| `ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY` | `yes` | Prioritize history from current directory |
-| `ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER` | (unset) | Set to any value to enable suggestions on empty buffer (requires zsh 5.3+) |
+| `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `1` | Minimum input length before querying (`0` enables empty-buffer suggestions) |
+| `ZSH_AUTOSUGGEST_AI_HISTORY_LINES` | `5` | Number of recent history lines to send as context |
+| `ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY` | `no` | Prioritize history from current directory |
+| `ZSH_AUTOSUGGEST_AI_DEBUG` | (unset) | Prints AI debug logs to stderr when enabled |
 
 #### Empty Buffer Suggestions
 
-By default, suggestions only appear when you start typing. You can enable suggestions on an empty command line by setting `ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER`:
+By default, suggestions only appear when you start typing. You can enable suggestions on an empty command line by setting `ZSH_AUTOSUGGEST_AI_MIN_INPUT=0`:
 
 ```sh
-export ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1
+export ZSH_AUTOSUGGEST_AI_MIN_INPUT=0
 export ZSH_AUTOSUGGEST_AI_API_KEY="your-api-key-here"
 export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 ```
@@ -150,6 +150,16 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 - This feature is primarily designed for the AI strategy, which can predict the next likely command based on your current directory, git status, and recent history
 - Traditional strategies (history, completion) don't benefit from empty buffer suggestions
 - **Cost consideration:** With AI strategy, this will make an API request on every new prompt, which may increase API costs
+
+#### AI Debug Logs
+
+If AI suggestions are not appearing, enable debug logs:
+
+```sh
+export ZSH_AUTOSUGGEST_AI_DEBUG=1
+```
+
+Debug logs are printed to stderr with the prefix `[zsh-autosuggestions ai]`.
 
 #### Examples
 

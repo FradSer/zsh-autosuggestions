@@ -134,20 +134,20 @@ typeset -g ZSH_AUTOSUGGEST_AI_MODEL='gpt-3.5-turbo'
 typeset -g ZSH_AUTOSUGGEST_AI_TIMEOUT=5
 
 # Minimum input length before querying AI
+# Set to 0 to allow empty-buffer AI suggestions
 (( ! ${+ZSH_AUTOSUGGEST_AI_MIN_INPUT} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=0
+typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=1
 
 # Number of recent history lines to include as context
 (( ! ${+ZSH_AUTOSUGGEST_AI_HISTORY_LINES} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_HISTORY_LINES=20
+typeset -g ZSH_AUTOSUGGEST_AI_HISTORY_LINES=5
 
 # Prefer history entries from current directory
 (( ! ${+ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY=yes
+typeset -g ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY=no
 
-# Allow suggestions on empty buffer (opt-in, for AI strategy)
-# Set to any value to enable. Unset by default.
-# Uses (( ${+VAR} )) pattern like ZSH_AUTOSUGGEST_MANUAL_REBIND
+# Enable AI debug logs to stderr (opt-in).
+# Set to any value except 0/false/no/off to enable.
 
 #--------------------------------------------------------------------#
 # Utility Functions                                                  #
@@ -305,8 +305,9 @@ _zsh_autosuggest_disable() {
 # Enable suggestions
 _zsh_autosuggest_enable() {
 	unset _ZSH_AUTOSUGGEST_DISABLED
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 
-	if (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+	if (( $#BUFFER )) || (( min_input == 0 )); then
 		_zsh_autosuggest_fetch
 	fi
 }
@@ -366,11 +367,12 @@ _zsh_autosuggest_modify() {
 	fi
 
 	# Get a new suggestion if the buffer is not empty after modification
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 	if (( $#BUFFER > 0 )); then
 		if [[ -z "$ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE" ]] || (( $#BUFFER <= $ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE )); then
 			_zsh_autosuggest_fetch
 		fi
-	elif (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+	elif (( min_input == 0 )); then
 		_zsh_autosuggest_fetch
 	fi
 
@@ -393,8 +395,9 @@ _zsh_autosuggest_suggest() {
 	emulate -L zsh
 
 	local suggestion="$1"
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 
-	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); }; then
+	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( min_input == 0 )); }; then
 		POSTDISPLAY="${suggestion#$BUFFER}"
 	else
 		POSTDISPLAY=
@@ -561,8 +564,8 @@ _zsh_autosuggest_strategy_ai_gather_context() {
 	# Reset options to defaults and enable LOCAL_OPTIONS
 	emulate -L zsh
 
-	local max_lines="${ZSH_AUTOSUGGEST_AI_HISTORY_LINES:-20}"
-	local prefer_pwd="${ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY:-yes}"
+	local max_lines="${ZSH_AUTOSUGGEST_AI_HISTORY_LINES:-5}"
+	local prefer_pwd="${ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY:-no}"
 	local pwd_basename="${PWD:t}"
 	local -a context_lines
 	local -a pwd_lines
@@ -667,6 +670,18 @@ _zsh_autosuggest_strategy_ai_normalize() {
 	printf '%s' "$result"
 }
 
+_zsh_autosuggest_strategy_ai_debug_log() {
+	# Reset options to defaults and enable LOCAL_OPTIONS
+	emulate -L zsh
+
+	local debug="${ZSH_AUTOSUGGEST_AI_DEBUG:-0}"
+	case "${debug:l}" in
+		0|false|no|off) return ;;
+	esac
+
+	print -ru2 -- "[zsh-autosuggestions ai] $1"
+}
+
 _zsh_autosuggest_strategy_ai() {
 	# Reset options to defaults and enable LOCAL_OPTIONS
 	emulate -L zsh
@@ -675,14 +690,23 @@ _zsh_autosuggest_strategy_ai() {
 	local buffer="$1"
 
 	# Early return if API key not set (opt-in gate)
-	[[ -z "$ZSH_AUTOSUGGEST_AI_API_KEY" ]] && return
+	if [[ -z "$ZSH_AUTOSUGGEST_AI_API_KEY" ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "API key not set; skipping AI request."
+		return
+	fi
 
 	# Early return if curl or jq not available
-	[[ -z "${commands[curl]}" ]] || [[ -z "${commands[jq]}" ]] && return
+	if [[ -z "${commands[curl]}" ]] || [[ -z "${commands[jq]}" ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "Missing dependency: curl and jq are required."
+		return
+	fi
 
 	# Early return if input too short
-	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-0}"
-	[[ ${#buffer} -lt $min_input ]] && return
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
+	if [[ ${#buffer} -lt $min_input ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "Input shorter than ZSH_AUTOSUGGEST_AI_MIN_INPUT=$min_input."
+		return
+	fi
 
 	# Gather history context
 	local -a context
@@ -748,6 +772,8 @@ _zsh_autosuggest_strategy_ai() {
 	local timeout="${ZSH_AUTOSUGGEST_AI_TIMEOUT:-5}"
 	local response
 
+	_zsh_autosuggest_strategy_ai_debug_log "Requesting $endpoint (model=${ZSH_AUTOSUGGEST_AI_MODEL:-gpt-3.5-turbo}, input_len=${#buffer})."
+
 	response=$(curl --silent --max-time "$timeout" \
 		-H "Content-Type: application/json" \
 		-H "Authorization: Bearer $ZSH_AUTOSUGGEST_AI_API_KEY" \
@@ -756,28 +782,41 @@ _zsh_autosuggest_strategy_ai() {
 		"$endpoint" 2>/dev/null)
 
 	# Check curl exit status
-	[[ $? -ne 0 ]] && return
+	local curl_status=$?
+	if [[ $curl_status -ne 0 ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "curl failed with exit code $curl_status."
+		return
+	fi
 
 	# Split response body from HTTP status
 	local http_code="${response##*$'\n'}"
 	local body="${response%$'\n'*}"
 
 	# Early return on non-2xx status
-	[[ "$http_code" != 2* ]] && return
+	if [[ "$http_code" != 2* ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "HTTP $http_code from AI endpoint."
+		return
+	fi
 
 	# Extract content from JSON response
 	local content
 	content=$(printf '%s' "$body" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
 
 	# Early return if extraction failed
-	[[ -z "$content" ]] && return
+	if [[ -z "$content" ]]; then
+		_zsh_autosuggest_strategy_ai_debug_log "No suggestion content in API response."
+		return
+	fi
 
 	# Normalize response
 	local normalized
 	normalized="$(_zsh_autosuggest_strategy_ai_normalize "$content" "$buffer")"
 
 	# Set suggestion
-	[[ -n "$normalized" ]] && suggestion="$normalized"
+	if [[ -n "$normalized" ]]; then
+		suggestion="$normalized"
+		_zsh_autosuggest_strategy_ai_debug_log "AI suggestion accepted: '$normalized'."
+	fi
 }
 
 #--------------------------------------------------------------------#
@@ -1154,7 +1193,8 @@ add-zsh-hook precmd _zsh_autosuggest_start
 
 _zsh_autosuggest_line_init() {
 	emulate -L zsh
-	if (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )) && \
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
+	if (( min_input == 0 )) && \
 		(( ! ${+_ZSH_AUTOSUGGEST_DISABLED} )); then
 		_zsh_autosuggest_fetch
 	fi

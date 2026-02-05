@@ -34,7 +34,8 @@ add-zsh-hook precmd _zsh_autosuggest_start
 
 _zsh_autosuggest_line_init() {
 	emulate -L zsh
-	if (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )) && \
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
+	if (( min_input == 0 )) && \
 		(( ! ${+_ZSH_AUTOSUGGEST_DISABLED} )); then
 		_zsh_autosuggest_fetch
 	fi

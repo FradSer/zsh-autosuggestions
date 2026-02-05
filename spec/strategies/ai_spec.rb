@@ -195,7 +195,7 @@ EOFCURL
  end
 
  context 'empty buffer suggestions' do
- let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_AI_MIN_INPUT=0", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
 
  let(:before_sourcing) do
  -> {
@@ -216,8 +216,8 @@ EOFCURL
  end
  end
 
- context 'empty buffer without flag' do
- let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_STRATEGY=(ai history)"] }
+ context 'empty buffer with default min input' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_AI_MIN_INPUT=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai history)"] }
 
  let(:before_sourcing) do
  -> {
@@ -232,7 +232,7 @@ EOFCURL
  }
  end
 
- it 'does not suggest on empty buffer by default' do
+ it 'does not suggest on empty buffer when min input is 1' do
  with_history('git status') do
  sleep 0.5
  expect(session.content).to_not match(/git status/)
@@ -323,7 +323,7 @@ EOFCURL
  end
 
  context 'dual prompt modes' do
- let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_AI_MIN_INPUT=0", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
 
  context 'empty buffer mode' do
  let(:before_sourcing) do
@@ -366,7 +366,7 @@ EOFCURL
  end
 
  context 'temperature configuration' do
- let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_AI_MIN_INPUT=0", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
 
  let(:before_sourcing) do
  -> {

@@ -12,8 +12,9 @@ _zsh_autosuggest_disable() {
 # Enable suggestions
 _zsh_autosuggest_enable() {
 	unset _ZSH_AUTOSUGGEST_DISABLED
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 
-	if (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+	if (( $#BUFFER )) || (( min_input == 0 )); then
 		_zsh_autosuggest_fetch
 	fi
 }
@@ -73,11 +74,12 @@ _zsh_autosuggest_modify() {
 	fi
 
 	# Get a new suggestion if the buffer is not empty after modification
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 	if (( $#BUFFER > 0 )); then
 		if [[ -z "$ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE" ]] || (( $#BUFFER <= $ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE )); then
 			_zsh_autosuggest_fetch
 		fi
-	elif (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+	elif (( min_input == 0 )); then
 		_zsh_autosuggest_fetch
 	fi
 
@@ -100,8 +102,9 @@ _zsh_autosuggest_suggest() {
 	emulate -L zsh
 
 	local suggestion="$1"
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-1}"
 
-	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); }; then
+	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( min_input == 0 )); }; then
 		POSTDISPLAY="${suggestion#$BUFFER}"
 	else
 		POSTDISPLAY=
