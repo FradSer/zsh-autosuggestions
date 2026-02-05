@@ -121,9 +121,9 @@ typeset -g ZSH_AUTOSUGGEST_ORIGINAL_WIDGET_PREFIX=autosuggest-orig-
 typeset -g ZSH_AUTOSUGGEST_COMPLETIONS_PTY_NAME=zsh_autosuggest_completion_pty
 
 # AI strategy configuration
-# API endpoint for AI suggestions (OpenAI-compatible)
+# API base URL for AI suggestions (OpenAI-compatible)
 (( ! ${+ZSH_AUTOSUGGEST_AI_ENDPOINT} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_ENDPOINT='https://api.openai.com/v1/chat/completions'
+typeset -g ZSH_AUTOSUGGEST_AI_ENDPOINT='https://api.openai.com/v1'
 
 # AI model to use for suggestions
 (( ! ${+ZSH_AUTOSUGGEST_AI_MODEL} )) &&
@@ -743,7 +743,8 @@ _zsh_autosuggest_strategy_ai() {
 		"$temperature")
 
 	# Make API request
-	local endpoint="${ZSH_AUTOSUGGEST_AI_ENDPOINT:-https://api.openai.com/v1/chat/completions}"
+	local base_url="${ZSH_AUTOSUGGEST_AI_ENDPOINT:-https://api.openai.com/v1}"
+	local endpoint="${base_url}/chat/completions"
 	local timeout="${ZSH_AUTOSUGGEST_AI_TIMEOUT:-5}"
 	local response
 

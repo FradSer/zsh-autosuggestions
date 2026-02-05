@@ -217,7 +217,8 @@ _zsh_autosuggest_strategy_ai() {
 		"$temperature")
 
 	# Make API request
-	local endpoint="${ZSH_AUTOSUGGEST_AI_ENDPOINT:-https://api.openai.com/v1/chat/completions}"
+	local base_url="${ZSH_AUTOSUGGEST_AI_ENDPOINT:-https://api.openai.com/v1}"
+	local endpoint="${base_url}/chat/completions"
 	local timeout="${ZSH_AUTOSUGGEST_AI_TIMEOUT:-5}"
 	local response
 

@@ -127,7 +127,7 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZSH_AUTOSUGGEST_AI_API_KEY` | (unset) | **Required.** API key for the LLM service. Strategy is disabled if unset. |
-| `ZSH_AUTOSUGGEST_AI_ENDPOINT` | `https://api.openai.com/v1/chat/completions` | API endpoint URL |
+| `ZSH_AUTOSUGGEST_AI_ENDPOINT` | `https://api.openai.com/v1` | API base URL |
 | `ZSH_AUTOSUGGEST_AI_MODEL` | `gpt-3.5-turbo` | Model name to use |
 | `ZSH_AUTOSUGGEST_AI_TIMEOUT` | `5` | Request timeout in seconds |
 | `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `0` | Minimum input length before querying |
@@ -162,7 +162,7 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 **Ollama (local LLM):**
 ```sh
 export ZSH_AUTOSUGGEST_AI_API_KEY="not-needed" # Required but unused by Ollama
-export ZSH_AUTOSUGGEST_AI_ENDPOINT="http://localhost:11434/v1/chat/completions"
+export ZSH_AUTOSUGGEST_AI_ENDPOINT="http://localhost:11434/v1"
 export ZSH_AUTOSUGGEST_AI_MODEL="codellama"
 export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 ```
@@ -170,7 +170,7 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 **Custom OpenAI-compatible endpoint:**
 ```sh
 export ZSH_AUTOSUGGEST_AI_API_KEY="your-key"
-export ZSH_AUTOSUGGEST_AI_ENDPOINT="https://your-endpoint.com/v1/chat/completions"
+export ZSH_AUTOSUGGEST_AI_ENDPOINT="https://your-endpoint.com/v1"
 export ZSH_AUTOSUGGEST_AI_MODEL="your-model"
 export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 ```
