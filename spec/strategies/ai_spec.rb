@@ -241,3 +241,167 @@ EOFCURL
  end
  end
  end
+
+ context 'endpoint construction' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ local url=""
+ for arg in "$@"; do
+ if [[ "$arg" == http* ]]; then
+ url="$arg"
+ break
+ fi
+ done
+ if [[ "$url" == */chat/completions ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"correct endpoint"}}]}
+200
+EOFCURL
+ else
+ cat <<EOFCURL
+{"error":"wrong endpoint"}
+400
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'appends /chat/completions to base URL' do
+ session.send_string('test')
+ wait_for { session.content }.to eq('correct endpoint')
+ end
+
+ context 'with custom base URL' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_AI_ENDPOINT=http://custom.api/v1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ it 'constructs endpoint correctly' do
+ session.send_string('test')
+ wait_for { session.content }.to eq('correct endpoint')
+ end
+ end
+ end
+
+ context 'environmental context gathering' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ local data=""
+ for arg in "$@"; do
+ if [[ "$arg" == -d ]]; then
+ shift
+ data="$1"
+ break
+ fi
+ shift
+ done
+ if [[ "$data" == *"Directory contents"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"has directory context"}}]}
+200
+EOFCURL
+ else
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"no context"}}]}
+200
+EOFCURL
+ fi
+ }')
+ session.run_command('ls() { echo "file1.txt\nfile2.txt"; }')
+ }
+ end
+
+ it 'includes directory contents in context' do
+ session.send_string('test')
+ wait_for { session.content }.to eq('has directory context')
+ end
+ end
+
+ context 'dual prompt modes' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ context 'empty buffer mode' do
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ local data=""
+ for arg in "$@"; do
+ if [[ "$arg" == -d ]]; then
+ shift
+ data="$1"
+ break
+ fi
+ shift
+ done
+ if [[ "$data" == *"prediction engine"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"prediction mode active"}}]}
+200
+EOFCURL
+ elif [[ "$data" == *"auto-completion engine"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"completion mode active"}}]}
+200
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'uses prediction prompt for empty buffer' do
+ session.send_keys('C-c')
+ wait_for { session.content(esc_seqs: true) }.to match(/prediction mode/)
+ end
+
+ it 'uses completion prompt for partial input' do
+ session.send_string('git')
+ wait_for { session.content }.to match(/completion mode/)
+ end
+ end
+ end
+
+ context 'temperature configuration' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ local data=""
+ for arg in "$@"; do
+ if [[ "$arg" == -d ]]; then
+ shift
+ data="$1"
+ break
+ fi
+ shift
+ done
+ if [[ "$data" == *"\"temperature\": 0.5"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"temp 0.5"}}]}
+200
+EOFCURL
+ elif [[ "$data" == *"\"temperature\": 0.3"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"temp 0.3"}}]}
+200
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'uses temperature 0.5 for empty buffer' do
+ session.send_keys('C-c')
+ wait_for { session.content(esc_seqs: true) }.to match(/temp 0.5/)
+ end
+
+ it 'uses temperature 0.3 for partial input' do
+ session.send_string('test')
+ wait_for { session.content }.to eq('temp 0.3')
+ end
+ end
