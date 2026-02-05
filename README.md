@@ -49,11 +49,12 @@ For more info, read the Character Highlighting section of the zsh manual: `man z
 
 ### Suggestion Strategy
 
-`ZSH_AUTOSUGGEST_STRATEGY` is an array that specifies how suggestions should be generated. The strategies in the array are tried successively until a suggestion is found. There are currently three built-in strategies to choose from:
+`ZSH_AUTOSUGGEST_STRATEGY` is an array that specifies how suggestions should be generated. The strategies in the array are tried successively until a suggestion is found. There are currently four built-in strategies to choose from:
 
 - `history`: Chooses the most recent match from history.
 - `completion`: Chooses a suggestion based on what tab-completion would suggest. (requires `zpty` module, which is included with zsh since 4.0.1)
 - `match_prev_cmd`: Like `history`, but chooses the most recent match whose preceding history item matches the most recently executed command ([more info](src/strategies/match_prev_cmd.zsh)). Note that this strategy won't work as expected with ZSH options that don't preserve the history order such as `HIST_IGNORE_ALL_DUPS` or `HIST_EXPIRE_DUPS_FIRST`.
+- `ai`: Queries an OpenAI-compatible LLM API to generate command completions based on your partial input, working directory, and recent shell history. (requires `curl` and `jq`, opt-in via `ZSH_AUTOSUGGEST_AI_API_KEY`)
 
 For example, setting `ZSH_AUTOSUGGEST_STRATEGY=(history completion)` will first try to find a suggestion from your history, but, if it can't find a match, will find a suggestion from the completion engine.
 
@@ -99,6 +100,63 @@ Set `ZSH_AUTOSUGGEST_HISTORY_IGNORE` to a [glob pattern](http://zsh.sourceforge.
 Set `ZSH_AUTOSUGGEST_COMPLETION_IGNORE` to a [glob pattern](http://zsh.sourceforge.net/Doc/Release/Expansion.html#Glob-Operators) to prevent offering completion suggestions when the buffer matches that pattern. For example, set it to `"git *"` to disable completion suggestions for git subcommands.
 
 **Note:** This only affects the `completion` suggestion strategy.
+
+### AI Strategy Configuration
+
+The `ai` strategy uses an OpenAI-compatible LLM API to generate intelligent command completions based on your shell context.
+
+#### Prerequisites
+
+- `curl` command-line tool
+- `jq` JSON processor
+- API key for an OpenAI-compatible service
+
+#### Setup
+
+To enable the AI strategy, you must set the `ZSH_AUTOSUGGEST_AI_API_KEY` environment variable and add `ai` to your strategy list:
+
+```sh
+export ZSH_AUTOSUGGEST_AI_API_KEY="your-api-key-here"
+export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
+```
+
+**Security Note:** Never commit your API key to version control. Consider storing it in a separate file (e.g., `~/.zsh_secrets`) that is sourced in your `.zshrc` and excluded from version control.
+
+#### Configuration Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZSH_AUTOSUGGEST_AI_API_KEY` | (unset) | **Required.** API key for the LLM service. Strategy is disabled if unset. |
+| `ZSH_AUTOSUGGEST_AI_ENDPOINT` | `https://api.openai.com/v1/chat/completions` | API endpoint URL |
+| `ZSH_AUTOSUGGEST_AI_MODEL` | `gpt-3.5-turbo` | Model name to use |
+| `ZSH_AUTOSUGGEST_AI_TIMEOUT` | `5` | Request timeout in seconds |
+| `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `3` | Minimum input length before querying |
+| `ZSH_AUTOSUGGEST_AI_HISTORY_LINES` | `20` | Number of recent history lines to send as context |
+| `ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY` | `yes` | Prioritize history from current directory |
+
+#### Examples
+
+**OpenAI (default):**
+```sh
+export ZSH_AUTOSUGGEST_AI_API_KEY="sk-..."
+export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
+```
+
+**Ollama (local LLM):**
+```sh
+export ZSH_AUTOSUGGEST_AI_API_KEY="not-needed" # Required but unused by Ollama
+export ZSH_AUTOSUGGEST_AI_ENDPOINT="http://localhost:11434/v1/chat/completions"
+export ZSH_AUTOSUGGEST_AI_MODEL="codellama"
+export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
+```
+
+**Custom OpenAI-compatible endpoint:**
+```sh
+export ZSH_AUTOSUGGEST_AI_API_KEY="your-key"
+export ZSH_AUTOSUGGEST_AI_ENDPOINT="https://your-endpoint.com/v1/chat/completions"
+export ZSH_AUTOSUGGEST_AI_MODEL="your-model"
+export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
+```
 
 
 ### Key Bindings

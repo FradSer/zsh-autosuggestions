@@ -93,3 +93,28 @@ typeset -g ZSH_AUTOSUGGEST_ORIGINAL_WIDGET_PREFIX=autosuggest-orig-
 # Pty name for capturing completions for completion suggestion strategy
 (( ! ${+ZSH_AUTOSUGGEST_COMPLETIONS_PTY_NAME} )) &&
 typeset -g ZSH_AUTOSUGGEST_COMPLETIONS_PTY_NAME=zsh_autosuggest_completion_pty
+
+# AI strategy configuration
+# API endpoint for AI suggestions (OpenAI-compatible)
+(( ! ${+ZSH_AUTOSUGGEST_AI_ENDPOINT} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_ENDPOINT='https://api.openai.com/v1/chat/completions'
+
+# AI model to use for suggestions
+(( ! ${+ZSH_AUTOSUGGEST_AI_MODEL} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_MODEL='gpt-3.5-turbo'
+
+# Timeout in seconds for AI API requests
+(( ! ${+ZSH_AUTOSUGGEST_AI_TIMEOUT} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_TIMEOUT=5
+
+# Minimum input length before querying AI
+(( ! ${+ZSH_AUTOSUGGEST_AI_MIN_INPUT} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=3
+
+# Number of recent history lines to include as context
+(( ! ${+ZSH_AUTOSUGGEST_AI_HISTORY_LINES} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_HISTORY_LINES=20
+
+# Prefer history entries from current directory
+(( ! ${+ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY} )) &&
+typeset -g ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY=yes
