@@ -130,9 +130,26 @@ export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
 | `ZSH_AUTOSUGGEST_AI_ENDPOINT` | `https://api.openai.com/v1/chat/completions` | API endpoint URL |
 | `ZSH_AUTOSUGGEST_AI_MODEL` | `gpt-3.5-turbo` | Model name to use |
 | `ZSH_AUTOSUGGEST_AI_TIMEOUT` | `5` | Request timeout in seconds |
-| `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `3` | Minimum input length before querying |
+| `ZSH_AUTOSUGGEST_AI_MIN_INPUT` | `0` | Minimum input length before querying |
 | `ZSH_AUTOSUGGEST_AI_HISTORY_LINES` | `20` | Number of recent history lines to send as context |
 | `ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY` | `yes` | Prioritize history from current directory |
+| `ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER` | (unset) | Set to any value to enable suggestions on empty buffer (requires zsh 5.3+) |
+
+#### Empty Buffer Suggestions
+
+By default, suggestions only appear when you start typing. You can enable suggestions on an empty command line by setting `ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER`:
+
+```sh
+export ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1
+export ZSH_AUTOSUGGEST_AI_API_KEY="your-api-key-here"
+export ZSH_AUTOSUGGEST_STRATEGY=(ai history)
+```
+
+**Notes:**
+- Requires zsh 5.3+ for prompt-time suggestions
+- This feature is primarily designed for the AI strategy, which can predict the next likely command based on your current directory, git status, and recent history
+- Traditional strategies (history, completion) don't benefit from empty buffer suggestions
+- **Cost consideration:** With AI strategy, this will make an API request on every new prompt, which may increase API costs
 
 #### Examples
 

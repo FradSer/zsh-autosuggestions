@@ -13,7 +13,7 @@ _zsh_autosuggest_disable() {
 _zsh_autosuggest_enable() {
 	unset _ZSH_AUTOSUGGEST_DISABLED
 
-	if (( $#BUFFER )); then
+	if (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
 		_zsh_autosuggest_fetch
 	fi
 }
@@ -77,6 +77,8 @@ _zsh_autosuggest_modify() {
 		if [[ -z "$ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE" ]] || (( $#BUFFER <= $ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE )); then
 			_zsh_autosuggest_fetch
 		fi
+	elif (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+		_zsh_autosuggest_fetch
 	fi
 
 	return $retval
@@ -99,7 +101,7 @@ _zsh_autosuggest_suggest() {
 
 	local suggestion="$1"
 
-	if [[ -n "$suggestion" ]] && (( $#BUFFER )); then
+	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); }; then
 		POSTDISPLAY="${suggestion#$BUFFER}"
 	else
 		POSTDISPLAY=

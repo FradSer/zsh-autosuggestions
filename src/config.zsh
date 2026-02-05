@@ -109,7 +109,7 @@ typeset -g ZSH_AUTOSUGGEST_AI_TIMEOUT=5
 
 # Minimum input length before querying AI
 (( ! ${+ZSH_AUTOSUGGEST_AI_MIN_INPUT} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=3
+typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=0
 
 # Number of recent history lines to include as context
 (( ! ${+ZSH_AUTOSUGGEST_AI_HISTORY_LINES} )) &&
@@ -118,3 +118,7 @@ typeset -g ZSH_AUTOSUGGEST_AI_HISTORY_LINES=20
 # Prefer history entries from current directory
 (( ! ${+ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY} )) &&
 typeset -g ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY=yes
+
+# Allow suggestions on empty buffer (opt-in, for AI strategy)
+# Set to any value to enable. Unset by default.
+# Uses (( ${+VAR} )) pattern like ZSH_AUTOSUGGEST_MANUAL_REBIND

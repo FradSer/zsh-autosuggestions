@@ -31,3 +31,17 @@ fi
 
 # Start the autosuggestion widgets on the next precmd
 add-zsh-hook precmd _zsh_autosuggest_start
+
+_zsh_autosuggest_line_init() {
+	emulate -L zsh
+	if (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )) && \
+		(( ! ${+_ZSH_AUTOSUGGEST_DISABLED} )); then
+		_zsh_autosuggest_fetch
+	fi
+}
+
+# Use add-zle-hook-widget (zsh 5.3+) to avoid conflicts with other plugins
+if (( ${+functions[add-zle-hook-widget]} )) || \
+	autoload -Uz add-zle-hook-widget 2>/dev/null; then
+	add-zle-hook-widget zle-line-init _zsh_autosuggest_line_init
+fi

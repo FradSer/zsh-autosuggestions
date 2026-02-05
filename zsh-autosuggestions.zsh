@@ -135,7 +135,7 @@ typeset -g ZSH_AUTOSUGGEST_AI_TIMEOUT=5
 
 # Minimum input length before querying AI
 (( ! ${+ZSH_AUTOSUGGEST_AI_MIN_INPUT} )) &&
-typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=3
+typeset -g ZSH_AUTOSUGGEST_AI_MIN_INPUT=0
 
 # Number of recent history lines to include as context
 (( ! ${+ZSH_AUTOSUGGEST_AI_HISTORY_LINES} )) &&
@@ -144,6 +144,10 @@ typeset -g ZSH_AUTOSUGGEST_AI_HISTORY_LINES=20
 # Prefer history entries from current directory
 (( ! ${+ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY} )) &&
 typeset -g ZSH_AUTOSUGGEST_AI_PREFER_PWD_HISTORY=yes
+
+# Allow suggestions on empty buffer (opt-in, for AI strategy)
+# Set to any value to enable. Unset by default.
+# Uses (( ${+VAR} )) pattern like ZSH_AUTOSUGGEST_MANUAL_REBIND
 
 #--------------------------------------------------------------------#
 # Utility Functions                                                  #
@@ -302,7 +306,7 @@ _zsh_autosuggest_disable() {
 _zsh_autosuggest_enable() {
 	unset _ZSH_AUTOSUGGEST_DISABLED
 
-	if (( $#BUFFER )); then
+	if (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
 		_zsh_autosuggest_fetch
 	fi
 }
@@ -366,6 +370,8 @@ _zsh_autosuggest_modify() {
 		if [[ -z "$ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE" ]] || (( $#BUFFER <= $ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE )); then
 			_zsh_autosuggest_fetch
 		fi
+	elif (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); then
+		_zsh_autosuggest_fetch
 	fi
 
 	return $retval
@@ -388,7 +394,7 @@ _zsh_autosuggest_suggest() {
 
 	local suggestion="$1"
 
-	if [[ -n "$suggestion" ]] && (( $#BUFFER )); then
+	if [[ -n "$suggestion" ]] && { (( $#BUFFER )) || (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )); }; then
 		POSTDISPLAY="${suggestion#$BUFFER}"
 	else
 		POSTDISPLAY=
@@ -520,7 +526,7 @@ _zsh_autosuggest_partial_accept() {
 }
 
 #--------------------------------------------------------------------#
-# AI Suggestion Strategy         #
+# AI Suggestion Strategy   #
 #--------------------------------------------------------------------#
 # Queries an OpenAI-compatible LLM API to generate command
 # completions based on partial input, working directory, and
@@ -570,20 +576,52 @@ _zsh_autosuggest_strategy_ai_gather_context() {
 			line="${line:0:200}..."
 		fi
 
-		# Categorize by PWD relevance
-		if [[ "$prefer_pwd" == "yes" ]] && [[ "$line" == *"$pwd_basename"* || "$line" == *"./"* || "$line" == *"../"* ]]; then
+		# Categorize by PWD relevance - match full path, basename, or PWD-relevant commands
+		if [[ "$prefer_pwd" == "yes" ]] && [[ "$line" == *"$PWD"* || "$line" == *"$pwd_basename"* || "$line" == cd* || "$line" == ls* || "$line" == "git "* || "$line" == *"./"* || "$line" == *"../"* ]]; then
 			pwd_lines+=("$line")
 		else
 			other_lines+=("$line")
 		fi
 	done
 
+	# Cap PWD lines at 2/3 of max to maintain diversity
+	local pwd_max=$(( (max_lines * 2) / 3 ))
+	local pwd_count=${#pwd_lines}
+	[[ $pwd_count -gt $pwd_max ]] && pwd_count=$pwd_max
+
 	# Prioritize PWD-relevant lines, then fill with others
-	context_lines=("${pwd_lines[@]}" "${other_lines[@]}")
+	context_lines=("${(@)pwd_lines[1,$pwd_count]}" "${other_lines[@]}")
 	context_lines=("${(@)context_lines[1,$max_lines]}")
 
 	# Return via reply array
 	reply=("${context_lines[@]}")
+}
+
+_zsh_autosuggest_strategy_ai_gather_env_context() {
+	# Reset options to defaults and enable LOCAL_OPTIONS
+	emulate -L zsh
+
+	local -A env_info
+
+	# Directory listing (up to 20 entries)
+	local dir_contents
+	dir_contents=$(command ls -1 2>/dev/null | head -20 | tr '\n' ', ' | sed 's/, $//')
+	[[ -n "$dir_contents" ]] && env_info[dir_contents]="$dir_contents"
+
+	# Git branch (try two methods)
+	local git_branch
+	git_branch=$(command git branch --show-current 2>/dev/null)
+	[[ -z "$git_branch" ]] && git_branch=$(command git rev-parse --abbrev-ref HEAD 2>/dev/null)
+	[[ -n "$git_branch" ]] && env_info[git_branch]="$git_branch"
+
+	# Git status (up to 10 lines)
+	local git_status
+	git_status=$(command git status --porcelain 2>/dev/null | head -10 | tr '\n' '; ' | sed 's/; $//')
+	[[ -n "$git_status" ]] && env_info[git_status]="$git_status"
+
+	# Return via reply associative array
+	typeset -gA reply
+	reply=("${(@kv)env_info}")
 }
 
 _zsh_autosuggest_strategy_ai_normalize() {
@@ -596,6 +634,10 @@ _zsh_autosuggest_strategy_ai_normalize() {
 
 	# Strip \r
 	response="${response//$'\r'/}"
+
+	# Strip leading prompt artifacts ($ or >)
+	response="${response##\$ }"
+	response="${response##> }"
 
 	# Strip markdown code fences
 	response="${response##\`\`\`*$'\n'}"
@@ -639,13 +681,18 @@ _zsh_autosuggest_strategy_ai() {
 	[[ -z "${commands[curl]}" ]] || [[ -z "${commands[jq]}" ]] && return
 
 	# Early return if input too short
-	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-3}"
+	local min_input="${ZSH_AUTOSUGGEST_AI_MIN_INPUT:-0}"
 	[[ ${#buffer} -lt $min_input ]] && return
 
-	# Gather context
+	# Gather history context
 	local -a context
 	_zsh_autosuggest_strategy_ai_gather_context
 	context=("${reply[@]}")
+
+	# Gather environment context
+	local -A env_context
+	_zsh_autosuggest_strategy_ai_gather_env_context
+	env_context=("${(@kv)reply}")
 
 	# Build context string
 	local context_str=""
@@ -656,23 +703,44 @@ _zsh_autosuggest_strategy_ai() {
 		context_str+="\"$(_zsh_autosuggest_strategy_ai_json_escape "$line")\""
 	done
 
-	# Build JSON request body
-	local system_prompt="You are a shell command auto-completion engine. Given the user's partial command, working directory, and recent history, predict the complete command. Reply ONLY with the complete command. No explanations, no markdown, no quotes."
-	local user_message="Working directory: $PWD\nRecent history: [$context_str]\nPartial command: $buffer"
+	# Determine prompt mode (empty vs non-empty buffer)
+	local system_prompt user_message temperature
+	if [[ -z "$buffer" ]]; then
+		# Empty buffer: predict next command
+		system_prompt="You are a shell command prediction engine. Based on the working directory, directory contents, git status, and recent history, suggest the single most likely next command the user wants to run. Reply ONLY with the complete command. No explanations, no markdown, no quotes."
+		temperature="0.5"
+		user_message="Working directory: $PWD"
+		[[ -n "${env_context[dir_contents]}" ]] && user_message+="\nDirectory contents: ${env_context[dir_contents]}"
+		[[ -n "${env_context[git_branch]}" ]] && user_message+="\nGit branch: ${env_context[git_branch]}"
+		[[ -n "${env_context[git_status]}" ]] && user_message+="\nGit changes: ${env_context[git_status]}"
+		user_message+="\nRecent history: [$context_str]"
+	else
+		# Non-empty buffer: complete partial command
+		system_prompt="You are a shell command auto-completion engine. Given the user's partial command, working directory, and recent history, predict the complete command. Reply ONLY with the complete command. No explanations, no markdown, no quotes."
+		temperature="0.3"
+		user_message="Working directory: $PWD"
+		[[ -n "${env_context[dir_contents]}" ]] && user_message+="\nDirectory contents: ${env_context[dir_contents]}"
+		[[ -n "${env_context[git_branch]}" ]] && user_message+="\nGit branch: ${env_context[git_branch]}"
+		[[ -n "${env_context[git_status]}" ]] && user_message+="\nGit changes: ${env_context[git_status]}"
+		user_message+="\nRecent history: [$context_str]"
+		user_message+="\nPartial command: $buffer"
+	fi
 
+	# Build JSON request body
 	local json_body
 	json_body=$(printf '{
  "model": "%s",
  "messages": [
-  {"role": "system", "content": "%s"},
+ {"role": "system", "content": "%s"},
   {"role": "user", "content": "%s"}
  ],
-  "temperature": 0.3,
+ "temperature": %s,
  "max_tokens": 100
 }' \
 		"${ZSH_AUTOSUGGEST_AI_MODEL:-gpt-3.5-turbo}" \
 		"$(_zsh_autosuggest_strategy_ai_json_escape "$system_prompt")" \
-		"$(_zsh_autosuggest_strategy_ai_json_escape "$user_message")")
+		"$(_zsh_autosuggest_strategy_ai_json_escape "$user_message")" \
+		"$temperature")
 
 	# Make API request
 	local endpoint="${ZSH_AUTOSUGGEST_AI_ENDPOINT:-https://api.openai.com/v1/chat/completions}"
@@ -1082,3 +1150,17 @@ fi
 
 # Start the autosuggestion widgets on the next precmd
 add-zsh-hook precmd _zsh_autosuggest_start
+
+_zsh_autosuggest_line_init() {
+	emulate -L zsh
+	if (( ${+ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER} )) && \
+		(( ! ${+_ZSH_AUTOSUGGEST_DISABLED} )); then
+		_zsh_autosuggest_fetch
+	fi
+}
+
+# Use add-zle-hook-widget (zsh 5.3+) to avoid conflicts with other plugins
+if (( ${+functions[add-zle-hook-widget]} )) || \
+	autoload -Uz add-zle-hook-widget 2>/dev/null; then
+	add-zle-hook-widget zle-line-init _zsh_autosuggest_line_init
+fi

@@ -171,3 +171,73 @@ EOF
  end
  end
 end
+
+ context 'prompt artifact stripping' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ if [[ "$*" == *"max-time"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"$ git status"}}]}
+200
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'strips $ prompt artifact' do
+ session.send_string('git st')
+ wait_for { session.content }.to eq('git status')
+ end
+ end
+
+ context 'empty buffer suggestions' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_ALLOW_EMPTY_BUFFER=1", "ZSH_AUTOSUGGEST_STRATEGY=(ai)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ if [[ "$*" == *"max-time"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"git status"}}]}
+200
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'suggests command on empty buffer when enabled' do
+ session.send_keys('C-c')
+ wait_for { session.content(esc_seqs: true) }.to match(/git status/)
+ end
+ end
+
+ context 'empty buffer without flag' do
+ let(:options) { ["ZSH_AUTOSUGGEST_AI_API_KEY=test-key", "ZSH_AUTOSUGGEST_STRATEGY=(ai history)"] }
+
+ let(:before_sourcing) do
+ -> {
+ session.run_command('curl() {
+ if [[ "$*" == *"max-time"* ]]; then
+ cat <<EOFCURL
+{"choices":[{"message":{"content":"git status"}}]}
+200
+EOFCURL
+ fi
+ }')
+ }
+ end
+
+ it 'does not suggest on empty buffer by default' do
+ with_history('git status') do
+ sleep 0.5
+ expect(session.content).to_not match(/git status/)
+ session.send_string('git')
+ wait_for { session.content }.to eq('git status')
+ end
+ end
+ end
